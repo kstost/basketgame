@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta property="og:image" content="https://blog.kakaocdn.net/dn/ccK8WX/btrp7kfSqQn/FjOIzZXIvacw4tZLqtWhmK/img.png">
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="유튜브 코드깎는노인의 Basket 게임" />
+    <meta property="og:description" content="유튜브 코드깎는노인의 Basket 게임" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/gh/kstost/PIXICS@e428be0/loader.js"></script>
+    <script src="//cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <title>유튜브 코드깎는노인의 Basket 게임</title>
+    <style>
+        body {
+            margin: 0px;
+            background-color: #444;
+            overflow: hidden;
+            text-align: center;
+        }
+    </style>
+    <script>
+        window.addEventListener('load', async () => {
+
+            const { app, pixics, world, size, PIXICS, b2 } = await initPixics({
+                resolution: { width: 1080, height: 1920 },
+                container: document.querySelector('body'),
+                gravity: { x: 0, y: -10 },
+                worldscale: 200,
+            });
+            const { ratio } = size;
+            const { width, height } = size.actualSize;
+
+            let tickness = 10 * ratio;
+            let boundary = new PIXICS.PhysicsGraphics({ world });
+            boundary.getBody().SetBullet(true);
+            boundary.drawRect(width / 2, 0, tickness, height);
+            boundary.drawRect(-width / 2, 0, tickness, height);
+            boundary.drawRect(0, height / 2, width, tickness);
+            boundary.drawRect(0, -height / 2, width, tickness);
+            boundary.setContactable(false);
+            app.stage.addChild(boundary.getGraphic());
+
+            let balls = [];
+            let gameover = false;
+            let stage = 0;
+
+            function makeBar() {
+                let angle = Math.PI / 12;
+                let angleList = [-angle, angle];
+                let barState = 0;
+                let prev = 1;
+                let giuri;
+                let duration = 100;
+                let bar = new PIXICS.PhysicsGraphics({ world });
+                let json2 = { "layers": [{ "dots": { "polygon": [{ "x": 300, "y": 480 }, { "x": 1320, "y": 480 }, { "x": 1320, "y": 540 }, { "x": 300, "y": 540 }], "circle": [], "rect": [] }, "color": "ffffff", "friction": 1, "density": 0, "restitution": 0, "class": "polygon" }, { "dots": { "polygon": [{ "x": 1320, "y": 480 }, { "x": 1440, "y": 450 }, { "x": 1440, "y": 510 }, { "x": 1320, "y": 540 }], "circle": [], "rect": [] }, "color": "ffffff", "friction": 0, "density": 0, "restitution": 0, "class": "polygon" }, { "dots": { "polygon": [{ "x": 1440, "y": 450 }, { "x": 1500, "y": 390 }, { "x": 1500, "y": 450 }, { "x": 1440, "y": 510 }], "circle": [], "rect": [] }, "color": "ffffff", "friction": 0, "density": 0, "restitution": 0, "class": "polygon" }, { "dots": { "polygon": [{ "x": 510, "y": 240 }], "circle": [{ "x": 180, "y": 420 }], "rect": [] }, "color": "ffffff", "friction": 1, "density": 0, "restitution": 0, "class": "circle" }], "pivotpoint": { "x": 330, "y": 510 }, "scale": 30 }
+                bar.drawJSON({ scale: 27, json: json2 })
+                bar.drawCircle(0, 0, 60 * ratio, 0xff0000);
+                bar.setPosition(-540 * ratio, -700 * ratio)
+                bar.setFriction(0);
+                app.stage.addChild(bar.getGraphic());
+                bar.setUpdate(async (dt) => {
+                    if (barState !== prev) {
+                        giuri && await giuri.abort();
+                        let diff = angleList[barState] - bar.getAngle();
+                        if (diff) {
+                            let _duration = duration * (diff / (angleList[barState] - angleList[prev]));
+                            giuri = bar.rotateEaseBy(diff, _duration, 'linearTween');
+                        }
+                    }
+                    prev = barState;
+                });
+                function setBarState(state) {
+                    if (gameover) return;
+                    barState = state;
+                }
+                return {
+                    setBarState
+                }
+            }
+
+            function generateBall() {
+                let ball;
+                let state;
+                let radius = 80 * ratio;
+                let measureTime = { in: new Date(), out: new Date(), duration: 300 };
+                let gaveBirth = false;
+                function getState() {
+                    return state;
+                }
+                function turnState(mode) {
+                    ball.getGraphic().tint = mode ? 0xff0000 : 0x00aa00;
+                    state = mode;
+                    updatePoint();
+                }
+                function detect() {
+                    if (ball.isRelatedTo(basket)) {
+                        measureTime.in = new Date();
+                        if (new Date() - measureTime.out >= measureTime.duration) {
+                            turnState(false);
+                            if (!gaveBirth) {
+                                generateBall()
+                                gaveBirth = true;
+                            }
+                        }
+                    } else {
+                        measureTime.out = new Date();
+                        if (new Date() - measureTime.in >= measureTime.duration) {
+                            turnState(true);
+                        }
+                    }
+                }
+                ball = new PIXICS.PhysicsGraphics({ world });
+                ball.drawRect(0, 0, radius, radius, 0xffffff);
+                ball.setDynamic()
+                ball.setDensity(1111)
+                ball.setRestitution(0.3)
+                ball.setFriction(0);
+                ball.setPosition(-370 * ratio, -650 * ratio);
+                ball.setUpdate(detect);
+                turnState(true);
+                app.stage.addChild(ball.getGraphic());
+                let ballInstance = { getState, ball };
+                balls.push(ballInstance);
+                return ballInstance;
+            }
+            function startGame() {
+                while (balls.length) {
+                    balls.splice(0, 1)[0].ball.destroy();
+                }
+                stage = stage + 1;
+                gameover = false;
+                generateBall()
+            }
+            let basket = new PIXICS.PhysicsGraphics({ world });
+            basket.drawJSON({
+                scale: 30,
+                json: { "layers": [{ "dots": { "polygon": [{ "x": 630, "y": 60 }, { "x": 780, "y": 450 }, { "x": 750, "y": 480 }, { "x": 600, "y": 60 }], "circle": [], "rect": [] }, "color": "ffffff", "friction": 0, "density": 0, "restitution": 0, "class": "polygon" }, { "dots": { "polygon": [{ "x": 960, "y": 450 }, { "x": 1140, "y": 60 }, { "x": 1170, "y": 60 }, { "x": 990, "y": 480 }], "circle": [], "rect": [] }, "color": "ffffff", "friction": 0, "density": 0, "restitution": 0, "class": "polygon" }, { "dots": { "polygon": [{ "x": 780, "y": 450 }, { "x": 960, "y": 450 }, { "x": 990, "y": 480 }, { "x": 750, "y": 480 }], "circle": [], "rect": [] }, "color": "ffffff", "friction": 0, "density": 0, "restitution": 0, "class": "polygon" }], "pivotpoint": { "x": 870, "y": 480 }, "scale": 30 }
+            })
+            basket.setFriction(1);
+            basket.setGravityScale(0);
+            basket.setPosition(-200 * ratio, 0);
+            app.stage.addChild(basket.getGraphic());
+            (async () => {
+                while (true) {
+                    await basket.moveEaseBy(width * 0.2 * ratio, 0 * ratio, 1000, 'easeInOutQuad');
+                    await basket.moveEaseBy(-width * 0.2 * ratio, 0 * ratio, 1000, 'easeInOutQuad');
+                }
+            })();
+            (async () => {
+                basket.setAngle(Math.PI * 0.1);
+                while (true) {
+                    await basket.rotateEaseBy(-Math.PI * 0.35, 5000, 'easeInOutQuad');
+                    await basket.rotateEaseBy(Math.PI * 0.35, 5000, 'easeInOutQuad');
+                }
+            })();
+
+
+            let pointState = new PIXI.Text('', { fontFamily: 'Arial', fontSize: 170 * ratio, fill: 0xaaaaaa, align: 'center' });
+            app.stage.addChild(pointState);
+            function getTotalPoint() {
+                return balls.reduce((cnt, instance) => cnt + (!instance.getState() ? 1 : 0), 0)
+            }
+            function updatePoint() {
+                if (gameover) return
+                let totalPoint = getTotalPoint();
+                pointState.text = `${totalPoint}/${stage}`;
+                pointState.x = width / 2 + -(pointState.width / 2)
+                pointState.y = height / 8 + -(pointState.height / 2)
+                if (totalPoint >= stage) {
+                    gameover = true;
+                    Swal.fire({
+                        icon: 'success',
+                        title: `STAGE ${stage} CLEAR`,
+                        text: '잘했어요',
+                        footer: '<a href="https://www.youtube.com/channel/UCRpOIr-NJpK9S483ge20Pgw" target="_blank">유튜브 코드깎는노인 구독해주세요</a>'
+                    }).then(async (result) => {
+                        if (result.isConfirmed) {
+                            startGame()
+                        }
+                    })
+                }
+            };
+
+
+            let bar = makeBar();
+
+            const screenButton = new PIXI.Graphics();
+            screenButton.beginFill(0xffffff);
+            screenButton.drawRect(0, 0, width, height);
+            screenButton.endFill();
+            screenButton.x = 0;
+            screenButton.y = 0;
+            screenButton.alpha = 0.1;
+            screenButton.interactive = true;
+            app.stage.addChild(screenButton);
+            ['touchstart', 'mousedown'].forEach(en => {
+                screenButton.on(en, e => bar.setBarState(1))
+            });
+            ['touchend', 'mouseup'].forEach(en => {
+                screenButton.on(en, e => bar.setBarState(0))
+            });
+
+            startGame()
+        });
+    </script>
+</head>
+
+<body>
+
+</body>
+
+</html>
